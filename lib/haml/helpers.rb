@@ -640,7 +640,7 @@ MESSAGE
     # @param block [Proc] A Ruby block
     # @return [Boolean] Whether or not `block` is defined directly in a Haml template
     def block_is_haml?(block)
-      eval('!!defined?(_hamlout)', block.binding)
+      block.binding.local_variable_defined?(:_hamlout)
     end
 
     private
