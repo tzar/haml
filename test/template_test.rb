@@ -2,48 +2,13 @@ require 'test_helper'
 require 'mocks/article'
 
 require 'action_pack/version'
-
-module Haml::Filters::Test
-  include Haml::Filters::Base
-
-  def render(text)
-    "TESTING HAHAHAHA!"
-  end
-end
-
-module Haml::Helpers
-  def test_partial(name, locals = {})
-    Haml::Engine.new(File.read(File.join(TemplateTest::TEMPLATE_PATH, "_#{name}.haml"))).render(self, locals)
-  end
-end
-
-class Egocentic
-  def method_missing(*args)
-    self
-  end
-end
-
-class DummyController
-  attr_accessor :logger
-  def initialize
-    @logger = Egocentic.new
-  end
-
-  def self.controller_path
-    ''
-  end
-
-  def controller_path
-    ''
-  end
-end
+require 'template_test_helper'
 
 class TemplateTest < Haml::TestCase
-  TEMPLATE_PATH = File.join(File.dirname(__FILE__), "templates")
   TEMPLATES = %w{          very_basic        standard    helpers
     whitespace_handling    original_engine   list        helpful
     silent_script          tag_parsing       just_stuff  partials
-    nuke_outer_whitespace  nuke_inner_whitespace
+    nuke_outer_whitespace  nuke_inner_whitespace         bemit
     render_layout partial_layout partial_layout_erb}
 
   def setup
@@ -56,7 +21,7 @@ class TemplateTest < Haml::TestCase
   def create_base
     vars = { 'article' => Article.new, 'foo' => 'value one' }
 
-    base = ActionView::Base.new(TEMPLATE_PATH, vars)
+    base = ActionView::Base.new(TemplateTestHelper::TEMPLATE_PATH, vars)
 
     # This is needed by RJS in (at least) Rails 3
     base.instance_variable_set(:@template, base)
@@ -111,7 +76,7 @@ class TemplateTest < Haml::TestCase
     end
   end
 
-  def test_render_method_returning_null_with_ugly
+  def test_render_method_returning_null
     @base.instance_eval do
       def empty
         nil
@@ -122,28 +87,28 @@ class TemplateTest < Haml::TestCase
     end
 
     content_to_render = "%h1 This is part of the broken view.\n= render_something do |thing|\n  = thing.empty do\n    = 'test'"
-    result = render(content_to_render, :ugly => true)
+    result = render(content_to_render)
     expected_result = "<h1>This is part of the broken view.</h1>\n"
     assert_equal(expected_result, result)
   end
 
-  def test_simple_rendering_with_ugly
+  def test_simple_rendering
     content_to_render = "%p test\n= capture { 'foo' }"
-    result = render(content_to_render, :ugly => true)
+    result = render(content_to_render)
     expected_result = "<p>test</p>\nfoo\n"
     assert_equal(expected_result, result)
   end
 
   def test_templates_should_render_correctly_with_render_proc
     assert_renders_correctly("standard") do |name|
-      engine = Haml::Engine.new(File.read(File.dirname(__FILE__) + "/templates/#{name}.haml"), :format => :xhtml)
+      engine = Haml::Engine.new(File.read(File.dirname(__FILE__) + "/templates/#{name}.haml"), format: :xhtml)
       engine.render_proc(@base).call
     end
   end
 
   def test_templates_should_render_correctly_with_def_method
     assert_renders_correctly("standard") do |name|
-      engine = Haml::Engine.new(File.read(File.dirname(__FILE__) + "/templates/#{name}.haml"), :format => :xhtml)
+      engine = Haml::Engine.new(File.read(File.dirname(__FILE__) + "/templates/#{name}.haml"), format: :xhtml)
       engine.def_method(@base, "render_standard")
       @base.render_standard
     end
@@ -182,8 +147,8 @@ class TemplateTest < Haml::TestCase
     Haml::Template.options = old_options
   end
 
-  def test_with_output_buffer_with_ugly
-    assert_equal(<<HTML, render(<<HAML, :ugly => true))
+  def test_with_output_buffer
+    assert_equal(<<HTML, render(<<HAML))
 <p>
 foo
 baz
@@ -345,5 +310,13 @@ HTML
 - cache do
   Test
 HAML
+  end
+
+  class ::TosUnsafeObject; def to_s; '<hr>'; end; end
+  class ::TosSafeObject; def to_s; '<hr>'.html_safe; end; end
+
+  def test_object_that_returns_safe_buffer
+    assert_equal("<hr>\n", render('= ::TosSafeObject.new', escape_html: true))
+    assert_equal("&lt;hr&gt;\n", render('= ::TosUnsafeObject.new', escape_html: true))
   end
 end

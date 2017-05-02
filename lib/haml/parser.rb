@@ -1,3 +1,4 @@
+# frozen_string_literal: false
 require 'strscan'
 
 module Haml
@@ -88,14 +89,16 @@ module Haml
     ID_KEY    = 'id'.freeze
     CLASS_KEY = 'class'.freeze
 
-    def initialize(template, options)
-      @options            = options
+    def initialize(options)
+      @options = Options.wrap(options)
       # Record the indent levels of "if" statements to validate the subsequent
       # elsif and else statements are indented at the appropriate level.
       @script_level_stack = []
       @template_index     = 0
       @template_tabs      = 0
+    end
 
+    def call(template)
       match = template.rstrip.scan(/(([ \t]+)?(.*?))(?:\Z|\r\n|\r|\n)/m)
       # discard the last match which is always blank
       match.pop
@@ -104,9 +107,7 @@ module Haml
       end
       # Append special end-of-document marker
       @template << Line.new(nil, '-#', '-#', @template.size, self, true)
-    end
 
-    def parse
       @root = @parent = ParseNode.new(:root)
       @flat = false
       @filter_buffer = nil
@@ -204,6 +205,30 @@ module Haml
       end
     end
 
+    # @param [String] new - Hash literal including dynamic values.
+    # @param [String] old - Hash literal including dynamic values or Ruby literal of multiple Hashes which MUST be interpreted as method's last arguments.
+    class DynamicAttributes < Struct.new(:new, :old)
+      def old=(value)
+        unless value =~ /\A{.*}\z/m
+          raise ArgumentError.new('Old attributes must start with "{" and end with "}"')
+        end
+        super
+      end
+
+      # This will be a literal for Haml::Buffer#attributes's last argument, `attributes_hashes`.
+      def to_literal
+        [new, stripped_old].compact.join(', ')
+      end
+
+      private
+
+      # For `%foo{ { foo: 1 }, bar: 2 }`, :old is "{ { foo: 1 }, bar: 2 }" and this method returns " { foo: 1 }, bar: 2 " for last argument.
+      def stripped_old
+        return nil if old.nil?
+        old.sub!(/\A{/, '').sub!(/}\z/m, '')
+      end
+    end
+
     # Processes and deals with lowering indentation.
     def process_indent(line)
       return unless line.tabs <= @template_tabs && @template_tabs > 0
@@ -236,7 +261,7 @@ module Haml
         return push plain(line.strip!(3), :escape_html) if line.text[1, 2] == '=='
         return push script(line.strip!(2), :escape_html) if line.text[1] == SCRIPT
         return push flat_script(line.strip!(2), :escape_html) if line.text[1] == FLAT_SCRIPT
-        return push plain(line.strip!(1), :escape_html) if line.text[1] == ?\s
+        return push plain(line.strip!(1), :escape_html) if line.text[1] == ?\s || line.text[1..2] == '#{'
         push plain(line)
       when SCRIPT
         return push plain(line.strip!(2)) if line.text[1] == SCRIPT
@@ -252,7 +277,7 @@ module Haml
         return push plain(line.strip!(3), false) if line.text[1, 2] == '=='
         return push script(line.strip!(2), false) if line.text[1] == SCRIPT
         return push flat_script(line.strip!(2), false) if line.text[1] == FLAT_SCRIPT
-        return push plain(line.strip!(1), false) if line.text[1] == ?\s
+        return push plain(line.strip!(1), false) if line.text[1] == ?\s || line.text[1..2] == '#{'
         push plain(line)
       when ESCAPE
         line.text = line.text[1..-1]
@@ -361,7 +386,6 @@ module Haml
 
       preserve_tag = @options.preserve.include?(tag_name)
       nuke_inner_whitespace ||= preserve_tag
-      preserve_tag = false if @options.ugly
       escape_html = (action == '&' || (action != '!' && @options.escape_html))
 
       case action
@@ -397,21 +421,19 @@ module Haml
       end
 
       attributes = Parser.parse_class_and_id(attributes)
-      attributes_list = []
+      dynamic_attributes = DynamicAttributes.new
 
       if attributes_hashes[:new]
         static_attributes, attributes_hash = attributes_hashes[:new]
-        Buffer.merge_attrs(attributes, static_attributes) if static_attributes
-        attributes_list << attributes_hash
+        AttributeBuilder.merge_attributes!(attributes, static_attributes) if static_attributes
+        dynamic_attributes.new = attributes_hash
       end
 
       if attributes_hashes[:old]
         static_attributes = parse_static_hash(attributes_hashes[:old])
-        Buffer.merge_attrs(attributes, static_attributes) if static_attributes
-        attributes_list << attributes_hashes[:old] unless static_attributes || @options.suppress_eval
+        AttributeBuilder.merge_attributes!(attributes, static_attributes) if static_attributes
+        dynamic_attributes.old = attributes_hashes[:old] unless static_attributes || @options.suppress_eval
       end
-
-      attributes_list.compact!
 
       raise SyntaxError.new(Error.message(:illegal_nesting_self_closing), @next_line.index) if block_opened? && self_closing
       raise SyntaxError.new(Error.message(:no_ruby_code, action), last_line - 1) if parse && value.empty?
@@ -427,7 +449,7 @@ module Haml
       line = handle_ruby_multiline(line) if parse
 
       ParseNode.new(:tag, line.index + 1, :name => tag_name, :attributes => attributes,
-        :attributes_hashes => attributes_list, :self_closing => self_closing,
+        :dynamic_attributes => dynamic_attributes, :self_closing => self_closing,
         :nuke_inner_whitespace => nuke_inner_whitespace,
         :nuke_outer_whitespace => nuke_outer_whitespace, :object_ref => object_ref,
         :escape_html => escape_html, :preserve_tag => preserve_tag,
@@ -533,7 +555,7 @@ module Haml
       attributes = {}
       return attributes if list.empty?
 
-      list.scan(/([#.])([-:_a-zA-Z0-9]+)/) do |type, property|
+      list.scan(/([#.])([-:_a-zA-Z0-9\@]+)/) do |type, property|
         case type
         when '.'
           if attributes[CLASS_KEY]
@@ -548,10 +570,16 @@ module Haml
       attributes
     end
 
+    # This method doesn't use Haml::AttributeParser because currently it depends on Ripper and Rubinius doesn't provide it.
+    # Ideally this logic should be placed in Haml::AttributeParser instead of here and this method should use it.
+    #
+    # @param  [String] text - Hash literal or text inside old attributes
+    # @return [Hash,nil] - Return nil if text is not static Hash literal
     def parse_static_hash(text)
       attributes = {}
       return attributes if text.empty?
 
+      text = text[1...-1] # strip brackets
       scanner = StringScanner.new(text)
       scanner.scan(/\s+/)
       until scanner.eos?
@@ -566,7 +594,7 @@ module Haml
 
     # Parses a line into tag_name, attributes, attributes_hash, object_ref, action, value
     def parse_tag(text)
-      match = text.scan(/%([-:\w]+)([-:\w.#]*)(.+)?/)[0]
+      match = text.scan(/%([-:\w]+)([-:\w.#\@]*)(.+)?/)[0]
       raise SyntaxError.new(Error.message(:invalid_tag, text)) unless match
 
       tag_name, attributes, rest = match
@@ -617,6 +645,9 @@ module Haml
        nuke_inner_whitespace, action, value, last_line || @line.index + 1]
     end
 
+    # @return [String] attributes_hash - Hash literal starting with `{` and ending with `}`
+    # @return [String] rest
+    # @return [Integer] last_line
     def parse_old_attributes(text)
       text = text.dup
       last_line = @line.index + 1
@@ -634,10 +665,12 @@ module Haml
         raise e
       end
 
-      attributes_hash = attributes_hash[1...-1] if attributes_hash
       return attributes_hash, rest, last_line
     end
 
+    # @return [Array<Hash,String,nil>] - [static_attributs (Hash), dynamic_attributes (nil or String starting with `{` and ending with `}`)]
+    # @return [String] rest
+    # @return [Integer] last_line
     def parse_new_attributes(text)
       scanner = StringScanner.new(text)
       last_line = @line.index + 1

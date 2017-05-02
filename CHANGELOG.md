@@ -1,9 +1,12 @@
 # Haml Changelog
 
-## 4.1.0 (Unreleased)
+## 5.0.0
 
-* Haml now requires Ruby 1.9.2 or above.
-* Rails 3.0 and 3.1 are no longer supported, matching the official
+Released on April 26, 2017
+([diff](https://github.com/haml/haml/compare/4.0.7...5.0.0)).
+
+* Haml now requires Ruby 2.0.0 or above.
+* Rails 3 is no longer supported, matching the official
   [Maintenance Policy for Ruby on Rails](http://weblog.rubyonrails.org/2013/2/24/maintenance-policy-for-ruby-on-rails/).
   (Tee Parham)
 * Fix for attribute merging. When an attribute method (or literal nested hash)
@@ -17,6 +20,31 @@
 * Add a tracing option. When enabled, Haml will output a data-trace attribute on each tag showing the path
   to the source Haml file from which it was generated. Thanks [Alex Babkin](https://github.com/ababkin).
 * Fix #@foo and #$foo style interpolation that was not working in html_safe mode. (Akira Matsuda)
+* Add `haml_tag_if` to render a block, conditionally wrapped in another element (Matt Wildig)
+* Escape Ruby script interpolated in filters. (Matt Wildig)
+* The `haml` command's debug option (`-d`) no longer executes the Haml code, but
+  rather checks the generated Ruby syntax for errors.
+* Support Rails 5.1 Erubi template handler.
+* Support Sprockets 3. Thanks [Sam Davies](https://github.com/samphilipd) and [Jeremy Venezia](https://github.com/jvenezia).
+* Allow `@` as tag's class name. Thanks [Joe Bartlett](https://github.com/redoPop).
+* Raise `Haml::InvalidAttributeNameError` when attribute name includes invalid characters. (Takashi Kokubun)
+* Drop dynamic quotes support and always escape `'` for `escape_html`/`escape_attrs` instead.
+  Also, escaped results are slightly changed and always unified to the same characters. (Takashi Kokubun)
+* Don't preserve newlines in attributes. (Takashi Kokubun)
+* Add temple gem as dependency and create `Haml::TempleEngine` class.
+  Some methods in `Haml::Compiler` are migrated to `Haml::TempleEngine`. (Takashi Kokubun)
+* Drop parser/compiler accessor from `Haml::Engine`. Modify `Haml::Engine#initialize` options
+  or `Haml::Template.options` instead. (Takashi Kokubun)
+* Don't ignore unexpected exceptions on initializing `ActionView::OutputBuffer`. (Takashi Kokubun)
+* Analyze attribute values by Ripper and render static attributes beforehand. (Takashi Kokubun)
+* Optimize attribute rendering about 3x faster. (Takashi Kokubun)
+
+## 4.0.7
+
+Released on August 10, 2015
+([diff](https://github.com/haml/haml/compare/4.0.6...4.0.7)).
+
+* Significantly improve performance of regexp used to fix whitespace handling in textareas (thanks [Stan Hu](https://github.com/stanhu)).
 
 ## 4.0.6
 

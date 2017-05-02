@@ -2,8 +2,7 @@
 require 'action_view'
 
 module Haml
-
-  class ErubisTemplateHandler < ActionView::Template::Handlers::Erubis
+  class ErubiTemplateHandler < ActionView::Template::Handlers::ERB::Erubi
 
     def initialize(*args, &blk)
       @newline_pending = 0
@@ -11,13 +10,9 @@ module Haml
     end
   end
 
-  class SafeErubisTemplate < Tilt::ErubisTemplate
-
-    def initialize_engine
-    end
-
+  class SafeErubiTemplate < Tilt::ErubiTemplate
     def prepare
-      @options.merge! :engine_class => Haml::ErubisTemplateHandler
+      @options.merge! engine_class: Haml::ErubiTemplateHandler
       super
     end
 

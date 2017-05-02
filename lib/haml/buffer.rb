@@ -1,13 +1,10 @@
+# frozen_string_literal: true
 module Haml
   # This class is used only internally. It holds the buffer of HTML that
   # is eventually output as the resulting document.
   # It's called from within the precompiled code,
   # and helps reduce the amount of processing done within `instance_eval`ed code.
   class Buffer
-    ID_KEY    = 'id'.freeze
-    CLASS_KEY = 'class'.freeze
-    DATA_KEY  = 'data'.freeze
-
     include Haml::Helpers
     include Haml::Util
 
@@ -94,7 +91,8 @@ module Haml
     def initialize(upper = nil, options = {})
       @active     = true
       @upper      = upper
-      @options    = options
+      @options    = Options.buffer_defaults
+      @options    = @options.merge(options) unless options.empty?
       @buffer     = new_encoded_string
       @tabulation = 0
 
@@ -131,70 +129,13 @@ module Haml
       @real_tabs += tab_change
     end
 
-    # the number of arguments here is insane, but passing in an options hash instead of named arguments
-    # causes a significant performance regression
-    def format_script(result, preserve_script, in_tag, preserve_tag, escape_html, nuke_inner_whitespace, interpolated, ugly)
-      result_name = escape_html ? html_escape(result.to_s) : result.to_s
-
-      if ugly
-        result = nuke_inner_whitespace ? result_name.strip : result_name
-        result = preserve(result, preserve_script, preserve_tag)
-        fix_textareas!(result) if toplevel? && result.include?('<textarea')
-        return result
-      end
-
-      # If we're interpolated,
-      # then the custom tabulation is handled in #push_text.
-      # The easiest way to avoid it here is to reset @tabulation.
-      if interpolated
-        old_tabulation = @tabulation
-        @tabulation = 0
-      end
-
-      in_tag_no_nuke = in_tag && !nuke_inner_whitespace
-      preserved_no_nuke = in_tag_no_nuke && preserve_tag
-      tabulation = !preserved_no_nuke && @real_tabs
-
-      result = nuke_inner_whitespace ? result_name.strip : result_name.rstrip
-      result = preserve(result, preserve_script, preserve_tag)
-
-      has_newline = !preserved_no_nuke && result.include?("\n")
-
-      if in_tag_no_nuke && (preserve_tag || !has_newline)
-        @real_tabs -= 1
-        @tabulation = old_tabulation if interpolated
-        return result
-      end
-
-      unless preserved_no_nuke
-        # Precompiled tabulation may be wrong
-        result = "#{tabs}#{result}" if !interpolated && !in_tag && @tabulation > 0
-
-        if has_newline
-          result.gsub! "\n", "\n#{tabs(tabulation)}"
-
-          # Add tabulation if it wasn't precompiled
-          result = "#{tabs(tabulation)}#{result}" if in_tag_no_nuke
-        end
-
-        fix_textareas!(result) if toplevel? && result.include?('<textarea')
-
-        if in_tag_no_nuke
-          result = "\n#{result}\n#{tabs(tabulation-1)}"
-          @real_tabs -= 1
-        end
-        @tabulation = old_tabulation if interpolated
-        result
-      end
-    end
-
     def attributes(class_id, obj_ref, *attributes_hashes)
       attributes = class_id
       attributes_hashes.each do |old|
-        self.class.merge_attrs(attributes, Hash[old.map {|k, v| [k.to_s, v]}])
+        AttributeBuilder.merge_attributes!(attributes, Hash[old.map {|k, v| [k.to_s, v]}])
       end
-      self.class.merge_attrs(attributes, parse_object_ref(obj_ref)) if obj_ref
-      Compiler.build_attributes(
+      AttributeBuilder.merge_attributes!(attributes, parse_object_ref(obj_ref)) if obj_ref
+      AttributeBuilder.build_attributes(
         html?, @options[:attr_wrapper], @options[:escape_attrs], @options[:hyphenate_data_attrs], attributes)
     end
 
@@ -209,61 +150,6 @@ module Haml
       buffer << buffer.slice!(capture_position..-1).rstrip
     end
 
-    # Merges two attribute hashes.
-    # This is the same as `to.merge!(from)`,
-    # except that it merges id, class, and data attributes.
-    #
-    # ids are concatenated with `"_"`,
-    # and classes are concatenated with `" "`.
-    # data hashes are simply merged.
-    #
-    # Destructively modifies both `to` and `from`.
-    #
-    # @param to [{String => String}] The attribute hash to merge into
-    # @param from [{String => #to_s}] The attribute hash to merge from
-    # @return [{String => String}] `to`, after being merged
-    def self.merge_attrs(to, from)
-      from[ID_KEY] = Compiler.filter_and_join(from[ID_KEY], '_') if from[ID_KEY]
-      if to[ID_KEY] && from[ID_KEY]
-        to[ID_KEY] << "_#{from.delete(ID_KEY)}"
-      elsif to[ID_KEY] || from[ID_KEY]
-        from[ID_KEY] ||= to[ID_KEY]
-      end
-
-      from[CLASS_KEY] = Compiler.filter_and_join(from[CLASS_KEY], ' ') if from[CLASS_KEY]
-      if to[CLASS_KEY] && from[CLASS_KEY]
-        # Make sure we don't duplicate class names
-        from[CLASS_KEY] = (from[CLASS_KEY].to_s.split(' ') | to[CLASS_KEY].split(' ')).sort.join(' ')
-      elsif to[CLASS_KEY] || from[CLASS_KEY]
-        from[CLASS_KEY] ||= to[CLASS_KEY]
-      end
-
-      from.keys.each do |key|
-        next unless from[key].kind_of?(Hash) || to[key].kind_of?(Hash)
-
-        from_data = from.delete(key)
-        # forces to_data & from_data into a hash
-        from_data = { nil => from_data } if from_data && !from_data.is_a?(Hash)
-        to[key] = { nil => to[key] } if to[key] && !to[key].is_a?(Hash)
-
-        if from_data && !to[key]
-          to[key] = from_data
-        elsif from_data && to[key]
-          to[key].merge! from_data
-        end
-      end
-
-      to.merge!(from)
-    end
-
-    private
-
-    def preserve(result, preserve_script, preserve_tag)
-      return Haml::Helpers.preserve(result) if preserve_tag
-      return Haml::Helpers.find_and_preserve(result, options[:preserve]) if preserve_script
-      result
-    end
-
     # Works like #{find_and_preserve}, but allows the first newline after a
     # preserved opening tag to remain unencoded, and then outdents the content.
     # This change was motivated primarily by the change in Rails 3.2.3 to emit
@@ -273,21 +159,26 @@ module Haml
     # @since Haml 4.0.1
     # @private
     def fix_textareas!(input)
-      pattern = /([ ]*)<(textarea)([^>]*)>(\n|&#x000A;)(.*?)(<\/\2>)/im
+      return input unless toplevel? && input.include?('<textarea'.freeze)
+
+      pattern = /<(textarea)([^>]*)>(\n|&#x000A;)(.*?)<\/textarea>/im
       input.gsub!(pattern) do |s|
         match = pattern.match(s)
-        content = match[5]
-        if match[4] == '&#x000A;'
+        content = match[4]
+        if match[3] == '&#x000A;'
           content.sub!(/\A /, '&#x0020;')
         else
           content.sub!(/\A[ ]*/, '')
         end
-        "#{match[1]}<#{match[2]}#{match[3]}>\n#{content}</#{match[2]}>"
+        "<#{match[1]}#{match[2]}>\n#{content}</#{match[1]}>"
       end
+      input
     end
 
+    private
+
     def new_encoded_string
-      "".encode(Encoding.find(options[:encoding]))
+      "".encode(options[:encoding])
     end
 
     @@tab_cache = {}
@@ -325,7 +216,7 @@ module Haml
         id = "#{ prefix }_#{ id }"
       end
 
-      {ID_KEY => id, CLASS_KEY => class_name}
+      { 'id'.freeze => id, 'class'.freeze => class_name }
     end
 
     # Changes a word from camel case to underscores.

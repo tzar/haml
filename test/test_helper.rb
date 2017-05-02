@@ -17,6 +17,7 @@ require 'minitest/autorun'
 require 'action_pack'
 require 'action_controller'
 require 'action_view'
+require 'action_view/base'
 require 'nokogiri'
 require 'rails'
 
@@ -25,6 +26,7 @@ if defined?(I18n.enforce_available_locales)
 end
 
 class TestApp < Rails::Application
+  config.eager_load = false
   config.root = ""
 end
 Rails.application = TestApp
@@ -38,7 +40,8 @@ $VERBOSE = true
 require 'haml'
 require 'haml/template'
 
-Haml::Template.options[:ugly]   = false
+TestApp.initialize!
+
 Haml::Template.options[:format] = :xhtml
 
 BASE_TEST_CLASS = if defined?(Minitest::Test)

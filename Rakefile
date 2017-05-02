@@ -4,22 +4,26 @@ require "bundler/gem_tasks"
 
 task :default => :test
 
+# FIXME: Redefining :test task to run test/options_test.rb in isolated process since it depends on whether Rails is loaded or not.
+# Remove this task when we finished changing escape_html option to be true by default.
+isolated_test = Rake::TestTask.new do |t|
+  t.libs << 'test'
+  t.test_files = %w[test/options_test.rb]
+  t.warning = true
+  t.verbose = true
+end
+Rake::TestTask.new do |t|
+  t.libs << 'test'
+  t.test_files = Dir['test/*_test.rb'] + Dir['test/haml-spec/*_test.rb'] - isolated_test.file_list
+  t.warning = true
+  t.verbose = true
+end
+
 CLEAN.replace %w(pkg doc coverage .yardoc test/haml vendor)
 
 desc "Benchmark Haml against ERB. TIMES=n sets the number of runs, default is 1000."
 task :benchmark do
   sh "ruby benchmark.rb #{ENV['TIMES']}"
-end
-
-Rake::TestTask.new do |t|
-  t.libs << 'lib' << 'test'
-  # haml-spec tests are explicitly added after other tests so they don't
-  # interfere with the Haml loading process which can cause test failures
-  files = Dir["test/*_test.rb"]
-  files.concat(Dir['test/haml-spec/*_test.rb'])
-  t.test_files = files
-  t.warning = true
-  t.verbose = true
 end
 
 task :set_coverage_env do
@@ -77,7 +81,7 @@ task :profile do
   require 'haml'
   file = File.read(File.expand_path("../#{file}", __FILE__))
   obj = Object.new
-  Haml::Engine.new(file, :ugly => true).def_method(obj, :render)
+  Haml::Engine.new(file).def_method(obj, :render)
   result = RubyProf.profile { times.times { obj.render } }
 
   RubyProf.const_get("#{(ENV['OUTPUT'] || 'Flat').capitalize}Printer").new(result).print

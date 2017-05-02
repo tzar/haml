@@ -5,8 +5,9 @@ class FormModel
   extend ActiveModel::Naming
 end
 
-
 class HelperTest < Haml::TestCase
+  TEXT_AREA_CONTENT_REGEX = /<(textarea)[^>]*>\n(.*?)<\/\1>/im
+
   Post = Struct.new('Post', :body, :error_field, :errors)
   class PostErrors
     def on(name)
@@ -78,13 +79,13 @@ HAML
   end
 
   def test_list_of_should_render_correctly
-    assert_equal("<li>1</li>\n<li>2</li>\n", render("= list_of([1, 2]) do |i|\n  = i"))
-    assert_equal("<li>[1]</li>\n", render("= list_of([[1]]) do |i|\n  = i.inspect"))
-    assert_equal("<li>\n  <h1>Fee</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fi</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fo</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fum</h1>\n  <p>A word!</p>\n</li>\n",
+    assert_equal("<li>1</li>\n<li>2</li>", render("= list_of([1, 2]) do |i|\n  = i"))
+    assert_equal("<li>[1]</li>", render("= list_of([[1]]) do |i|\n  = i.inspect"))
+    assert_equal("<li>\n  <h1>Fee</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fi</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fo</h1>\n  <p>A word!</p>\n</li>\n<li>\n  <h1>Fum</h1>\n  <p>A word!</p>\n</li>",
       render("= list_of(['Fee', 'Fi', 'Fo', 'Fum']) do |title|\n  %h1= title\n  %p A word!"))
-    assert_equal("<li c='3'>1</li>\n<li c='3'>2</li>\n", render("= list_of([1, 2], {:c => 3}) do |i|\n  = i"))
-    assert_equal("<li c='3'>[1]</li>\n", render("= list_of([[1]], {:c => 3}) do |i|\n  = i.inspect"))
-    assert_equal("<li c='3'>\n  <h1>Fee</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fi</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fo</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fum</h1>\n  <p>A word!</p>\n</li>\n",
+    assert_equal("<li c='3'>1</li>\n<li c='3'>2</li>", render("= list_of([1, 2], {:c => 3}) do |i|\n  = i"))
+    assert_equal("<li c='3'>[1]</li>", render("= list_of([[1]], {:c => 3}) do |i|\n  = i.inspect"))
+    assert_equal("<li c='3'>\n  <h1>Fee</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fi</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fo</h1>\n  <p>A word!</p>\n</li>\n<li c='3'>\n  <h1>Fum</h1>\n  <p>A word!</p>\n</li>",
       render("= list_of(['Fee', 'Fi', 'Fo', 'Fum'], {:c => 3}) do |title|\n  %h1= title\n  %p A word!"))
   end
 
@@ -94,15 +95,15 @@ HAML
   end
 
   def test_tabs
-    assert_equal("foo\n  bar\nbaz\n", render("foo\n- tab_up\nbar\n- tab_down\nbaz"))
-    assert_equal("          <p>tabbed</p>\n", render("- buffer.tabulation=5\n%p tabbed"))
+    assert_equal("foo\nbar\nbaz\n", render("foo\n- tab_up\nbar\n- tab_down\nbaz"))
+    assert_equal("<p>tabbed</p>\n", render("- buffer.tabulation=5\n%p tabbed"))
   end
 
   def test_with_tabs
     assert_equal(<<HTML, render(<<HAML))
 Foo
-    Bar
-    Baz
+Bar
+Baz
 Baz
 HTML
 Foo
@@ -164,29 +165,15 @@ HAML
                  render('= content_tag "pre", "Foo bar\n   baz"', :action_view))
   end
 
-  # Rails >= 3.2.3 adds a newline after opening textarea tags.
-  def self.rails_text_area_helpers_emit_a_newline?
-    major, minor, tiny = ActionPack::VERSION::MAJOR, ActionPack::VERSION::MINOR, ActionPack::VERSION::TINY
-    major == 4 || ((major == 3) && (minor >= 2) && (tiny >= 3))
-  end
-
-  def text_area_content_regex
-    @text_area_content_regex ||= if self.class.rails_text_area_helpers_emit_a_newline?
-      /<(textarea)[^>]*>\n(.*?)<\/\1>/im
-    else
-      /<(textarea)[^>]*>(.*?)<\/\1>/im
-    end
-  end
-
   def test_text_area_tag
     output = render('= text_area_tag "body", "Foo\nBar\n Baz\n   Boom"', :action_view)
-    match_data = output.match(text_area_content_regex)
+    match_data = output.match(TEXT_AREA_CONTENT_REGEX)
     assert_equal "Foo&#x000A;Bar&#x000A; Baz&#x000A;   Boom", match_data[2]
   end
 
   def test_text_area
     output = render('= text_area :post, :body', :action_view)
-    match_data = output.match(text_area_content_regex)
+    match_data = output.match(TEXT_AREA_CONTENT_REGEX)
     assert_equal "Foo bar&#x000A;baz", match_data[2]
   end
 
@@ -194,26 +181,24 @@ HAML
     # non-indentation of textareas rendered inside partials
     @base.instance_variable_set(:@post, Post.new("Foo", nil, PostErrors.new))
     output = render(".foo\n  .bar\n    = render '/text_area_helper'", :action_view)
-    match_data = output.match(text_area_content_regex)
+    match_data = output.match(TEXT_AREA_CONTENT_REGEX)
     assert_equal 'Foo', match_data[2]
   end
 
-  if rails_text_area_helpers_emit_a_newline?
-    def test_textareas_should_preserve_leading_whitespace
-      # leading whitespace preservation
-      @base.instance_variable_set(:@post, Post.new("    Foo", nil, PostErrors.new))
-      output = render(".foo\n  = text_area :post, :body", :action_view)
-      match_data = output.match(text_area_content_regex)
-      assert_equal '&#x0020;   Foo', match_data[2]
-    end
+  def test_textareas_should_preserve_leading_whitespace
+    # leading whitespace preservation
+    @base.instance_variable_set(:@post, Post.new("    Foo", nil, PostErrors.new))
+    output = render(".foo\n  = text_area :post, :body", :action_view)
+    match_data = output.match(TEXT_AREA_CONTENT_REGEX)
+    assert_equal '&#x0020;   Foo', match_data[2]
+  end
 
-    def test_textareas_should_preserve_leading_whitespace_in_partials
-      # leading whitespace in textareas rendered inside partials
-      @base.instance_variable_set(:@post, Post.new("    Foo", nil, PostErrors.new))
-      output = render(".foo\n  .bar\n    = render '/text_area_helper'", :action_view)
-      match_data = output.match(text_area_content_regex)
-      assert_equal '&#x0020;   Foo', match_data[2]
-    end
+  def test_textareas_should_preserve_leading_whitespace_in_partials
+    # leading whitespace in textareas rendered inside partials
+    @base.instance_variable_set(:@post, Post.new("    Foo", nil, PostErrors.new))
+    output = render(".foo\n  .bar\n    = render '/text_area_helper'", :action_view)
+    match_data = output.match(TEXT_AREA_CONTENT_REGEX)
+    assert_equal '&#x0020;   Foo', match_data[2]
   end
 
   def test_capture_haml
@@ -383,9 +368,9 @@ HAML
   def test_haml_concat_with_multiline_string
     assert_equal(<<HTML, render(<<HAML))
 <p>
-  foo
-  bar
-  baz
+foo
+bar
+baz
 </p>
 HTML
 %p
@@ -393,10 +378,10 @@ HTML
 HAML
   end
 
-  def test_haml_tag_with_ugly
-    assert_equal(<<HTML, render(<<HAML, :ugly => true))
+  def test_haml_tag
+    assert_equal(<<HTML, render(<<HAML))
 <p>
-<strong>Hi!</strong>
+  <strong>Hi!</strong>
 </p>
 HTML
 - haml_tag :p do
@@ -407,7 +392,7 @@ HAML
   def test_haml_tag_if_positive
     assert_equal(<<HTML, render(<<HAML))
 <div class='conditional'>
-  <p>A para</p>
+<p>A para</p>
 </div>
 HTML
 - haml_tag_if true, '.conditional' do
@@ -418,7 +403,7 @@ HAML
   def test_haml_tag_if_positive_with_attributes
     assert_equal(<<HTML, render(<<HAML))
 <div class='conditional' foo='bar'>
-  <p>A para</p>
+<p>A para</p>
 </div>
 HTML
 - haml_tag_if true, '.conditional',  {:foo => 'bar'} do
@@ -537,7 +522,7 @@ HAML
   end
 
   def test_preserve_with_block
-    assert_equal("<pre>Foo&#x000A;Bar</pre>&#x000A;Foo&#x000A;Bar\n",
+    assert_equal("<pre>Foo&#x000A;Bar</pre>&#x000A;Foo&#x000A;Bar",
                  render("= preserve do\n  %pre\n    Foo\n    Bar\n  Foo\n  Bar"))
   end
 
@@ -574,10 +559,10 @@ MESSAGE
   end
 
   def test_error_return_line
-    render("%p foo\n= haml_concat 'foo'\n%p bar")
+    render("%p foo\n= haml_concat('foo').to_s\n%p bar")
     assert false, "Expected Haml::Error"
   rescue Haml::Error => e
-    assert_equal 2, e.backtrace[1].scan(/:(\d+)/).first.first.to_i
+    assert_equal 2, e.backtrace[0].scan(/:(\d+)/).first.first.to_i
   end
 
   def test_error_return_line_in_helper
