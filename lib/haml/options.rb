@@ -1,41 +1,19 @@
+# frozen_string_literal: true
 module Haml
   # This class encapsulates all of the configuration options that Haml
   # understands. Please see the {file:REFERENCE.md#options Haml Reference} to
   # learn how to set the options.
   class Options
 
-    @defaults = {
-      :attr_wrapper         => "'",
-      :autoclose            => %w(area base basefont br col command embed frame
-                                  hr img input isindex keygen link menuitem meta
-                                  param source track wbr),
-      :encoding             => "UTF-8",
-      :escape_attrs         => true,
-      :escape_html          => false,
-      :filename             => '(haml)',
-      :format               => :html5,
-      :hyphenate_data_attrs => true,
-      :line                 => 1,
-      :mime_type            => 'text/html',
-      :preserve             => %w(textarea pre code),
-      :remove_whitespace    => false,
-      :suppress_eval        => false,
-      :ugly                 => false,
-      :cdata                => false,
-      :parser_class         => ::Haml::Parser,
-      :compiler_class       => ::Haml::Compiler,
-      :trace                => false
-    }
-
     @valid_formats = [:html4, :html5, :xhtml]
 
-    @buffer_option_keys = [:autoclose, :preserve, :attr_wrapper, :ugly, :format,
+    @buffer_option_keys = [:autoclose, :preserve, :attr_wrapper, :format,
       :encoding, :escape_html, :escape_attrs, :hyphenate_data_attrs, :cdata]
 
     # The default option values.
     # @return Hash
     def self.defaults
-      @defaults
+      @defaults ||= Haml::TempleEngine.options.to_hash.merge(encoding: 'UTF-8')
     end
 
     # An array of valid values for the `:format` option.
@@ -49,6 +27,22 @@ module Haml
     # @return Hash
     def self.buffer_option_keys
       @buffer_option_keys
+    end
+
+    # Returns a subset of defaults: those that {Haml::Buffer} cares about.
+    # @return [{Symbol => Object}] The options hash
+    def self.buffer_defaults
+      @buffer_defaults ||= buffer_option_keys.inject({}) do |hash, key|
+        hash.merge(key => defaults[key])
+      end
+    end
+
+    def self.wrap(options)
+      if options.is_a?(Options)
+        options
+      else
+        Options.new(options)
+      end
     end
 
     # The character that should wrap element attributes. This defaults to `'`
@@ -146,13 +140,6 @@ module Haml
     # Defaults to `false`.
     attr_accessor :suppress_eval
 
-    # If set to `true`, Haml makes no attempt to properly indent or format the
-    # HTML output. This significantly improves rendering performance but makes
-    # viewing the source unpleasant.
-    #
-    # Defaults to `true` in Rails production  mode, and `false` everywhere else.
-    attr_accessor :ugly
-
     # Whether to include CDATA sections around javascript and css blocks when
     # using the `:javascript` or `:css` filters.
     #
@@ -177,6 +164,9 @@ module Haml
     # the path will be the full path.
     attr_accessor :trace
 
+    # Key is filter name in String and value is Class to use. Defaults to {}.
+    attr_accessor :filters
+
     def initialize(values = {}, &block)
       defaults.each {|k, v| instance_variable_set :"@#{k}", v}
       values.each {|k, v| send("#{k}=", v) if defaults.has_key?(k) && !v.nil?}
@@ -196,8 +186,7 @@ module Haml
       send "#{key}=", value
     end
 
-    [:escape_attrs, :hyphenate_data_attrs, :remove_whitespace, :suppress_eval,
-      :ugly].each do |method|
+    [:escape_attrs, :hyphenate_data_attrs, :remove_whitespace, :suppress_eval].each do |method|
       class_eval(<<-END)
         def #{method}?
           !! @#{method}
@@ -249,7 +238,6 @@ module Haml
     end
 
     def remove_whitespace=(value)
-      @ugly = true if value
       @remove_whitespace = value
     end
 
@@ -259,7 +247,7 @@ module Haml
       @encoding = "UTF-8" if @encoding.upcase == "US-ASCII"
     end
 
-    # Returns a subset of options: those that {Haml::Buffer} cares about.
+    # Returns a non-default subset of options: those that {Haml::Buffer} cares about.
     # All of the values here are such that when `#inspect` is called on the hash,
     # it can be `Kernel#eval`ed to get the same result back.
     #
@@ -268,7 +256,10 @@ module Haml
     # @return [{Symbol => Object}] The options hash
     def for_buffer
       self.class.buffer_option_keys.inject({}) do |hash, key|
-        hash[key] = send(key)
+        value = public_send(key)
+        if self.class.buffer_defaults[key] != value
+          hash[key] = value
+        end
         hash
       end
     end

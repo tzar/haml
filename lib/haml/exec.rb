@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'optparse'
 require 'rbconfig'
 require 'pp'
@@ -211,11 +212,6 @@ END
           @options[:output] = StringIO.new
         end
 
-        opts.on('-t', '--style NAME',
-                'Output style. Can be indented (default) or ugly.') do |name|
-          @options[:for_engine][:ugly] = true if name.to_sym == :ugly
-        end
-
         opts.on('-f', '--format NAME',
                 'Output format. Can be html5 (default), xhtml, or html4.') do |name|
           @options[:for_engine][:format] = name.to_sym
@@ -270,7 +266,7 @@ END
           Encoding.default_internal = internal if internal && !internal.empty?
         end
 
-        opts.on('-d', '--debug', "Print out the precompiled Ruby source.") do
+        opts.on('-d', '--debug', "Print out the precompiled Ruby source, and show syntax errors in the Ruby code.") do
           @options[:debug] = true
         end
 
@@ -296,20 +292,33 @@ END
 
         begin
 
-          engine = ::Haml::Engine.new(template, @options[:for_engine])
-          if @options[:check_syntax]
-            puts "Syntax OK"
+          if @options[:parse]
+            parser = ::Haml::Parser.new(::Haml::Options.new(@options))
+            pp parser.call(template)
             return
           end
 
-          if @options[:parse]
-            pp engine.parser.root
+          engine = ::Haml::Engine.new(template, @options[:for_engine])
+
+          if @options[:check_syntax]
+            error = validate_ruby(engine.precompiled)
+            if error
+              puts error.message.split("\n").first
+              exit 1
+            end
+            puts "Syntax OK"
             return
           end
 
           if @options[:debug]
             puts engine.precompiled
-            puts '=' * 100
+            error = validate_ruby(engine.precompiled)
+            if error
+              puts '=' * 100
+              puts error.message.split("\n")[0]
+              exit 1
+            end
+            return
           end
 
           result = engine.to_html
@@ -325,6 +334,14 @@ END
 
         output.write(result)
         output.close() if output.is_a? File
+      end
+
+      def validate_ruby(code)
+        begin
+          eval("BEGIN {return nil}; #{code}", binding, @options[:filename] || "")
+        rescue ::SyntaxError # Not to be confused with Haml::SyntaxError
+          $!
+        end
       end
     end
   end

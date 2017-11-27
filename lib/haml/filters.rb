@@ -1,3 +1,4 @@
+# frozen_string_literal: false
 require "tilt"
 
 module Haml
@@ -183,8 +184,7 @@ RUBY
 
           rendered = Haml::Helpers::find_and_preserve(filter.render_with_options(text, compiler.options), compiler.options[:preserve])
           rendered.rstrip!
-          rendered.gsub!("\n", "\n#{'  ' * @output_tabs}") unless options[:ugly]
-          push_text(rendered)
+          push_text("#{rendered}\n")
         end
       end
     end
@@ -282,7 +282,7 @@ RUBY
       def compile(compiler, text)
         return if compiler.options[:suppress_eval]
         compiler.instance_eval do
-          push_silent <<-FIRST.tr("\n", ';') + text + <<-LAST.tr("\n", ';')
+          push_silent "#{<<-FIRST.tr("\n", ';')}#{text}#{<<-LAST.tr("\n", ';')}"
             begin
               haml_io = StringIO.new(_hamlout.buffer, 'a')
           FIRST

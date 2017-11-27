@@ -1,22 +1,104 @@
 # Haml Changelog
 
-## 4.1.0 (Unreleased)
+## 5.0.4
 
-* Haml now requires Ruby 1.9.2 or above.
-* Rails 3.0 and 3.1 are no longer supported, matching the official
+Released on October 13, 2017
+([diff](https://github.com/haml/haml/compare/v5.0.3...v5.0.4)).
+
+* Fix `haml -c --stdin` regression in 5.0.2. [#958](https://github.com/haml/haml/pull/958) (thanks [Timo Göllner](https://github.com/TeaMoe))
+* Ruby 2.5 support (it wasn't working due to Ripper API change). (Akira Matsuda)
+
+## 5.0.3
+
+Released on September 7, 2017
+([diff](https://github.com/haml/haml/compare/v5.0.2...v5.0.3)).
+
+* Use `String#dump` instead of `String#inspect` to generate string literal. (Takashi Kokubun)
+* Fix Erubi superclass mismatch error. [#952](https://github.com/haml/haml/pull/952) (thanks [Robin Daugherty](https://github.com/RobinDaugherty))
+
+## 5.0.2
+
+Released on August 1, 2017
+([diff](https://github.com/haml/haml/compare/v5.0.1...v5.0.2)).
+
+* Let `haml -c` fail if generated Ruby code is syntax error. [#880](https://github.com/haml/haml/issues/880) (Takashi Kokubun)
+* Fix `NoMethodError` bug caused with Sprockets 3 and :sass filter. [#930](https://github.com/haml/haml/pull/930) (thanks [Gonzalez Maximiliano](https://github.com/emaxi))
+* Fix `list_of` helper with multi-line content. [#933](https://github.com/haml/haml/pull/933) (thanks [Benoit Larroque](https://github.com/zetaben))
+* Optimize rendering performance by changing timing to fix textareas. [#941](https://github.com/haml/haml/pull/941) (Takashi Kokubun)
+* Fix `TypeError` with empty :ruby filter. [#942](https://github.com/haml/haml/pull/942) (Takashi Kokubun)
+* Fix inconsistent attribute sort order. (Takashi Kokubun)
+
+## 5.0.1
+
+Released on May 3, 2017
+([diff](https://github.com/haml/haml/compare/v5.0.0...v5.0.1)).
+
+* Fix parsing attributes including string interpolation. [#917](https://github.com/haml/haml/pull/917) [#921](https://github.com/haml/haml/issues/921)
+* Stop distributing test files in gem package and allow installing on Windows.
+* Use ActionView's Erubi/Erubis handler for erb filter only on ActionView. [#914](https://github.com/haml/haml/pull/914)
+
+## 5.0.0
+
+Released on April 26, 2017
+([diff](https://github.com/haml/haml/compare/4.0.7...v5.0.0)).
+
+Breaking Changes
+
+* Haml now requires Ruby 2.0.0 or above.
+* Rails 3 is no longer supported, matching the official
   [Maintenance Policy for Ruby on Rails](http://weblog.rubyonrails.org/2013/2/24/maintenance-policy-for-ruby-on-rails/).
+  Use Haml 4 if you want to use Rails 3.
   (Tee Parham)
+* Remove `:ugly` option ([#894](https://github.com/haml/haml/pull/894))
+* The `haml` command's debug option (`-d`) no longer executes the Haml code, but
+  rather checks the generated Ruby syntax for errors.
+* Drop parser/compiler accessor from `Haml::Engine`. Modify `Haml::Engine#initialize` options
+  or `Haml::Template.options` instead. (Takashi Kokubun)
+* Drop dynamic quotes support and always escape `'` for `escape_html`/`escape_attrs` instead.
+  Also, escaped results are slightly changed and always unified to the same characters. (Takashi Kokubun)
+* Don't preserve newlines in attributes. (Takashi Kokubun)
+* HTML escape interpolated code in filters.
+  [#770](https://github.com/haml/haml/pull/770)
+  (Matt Wildig)
+
+        :javascript
+          #{JSON.generate(foo: "bar")}
+        Haml 4 output: {"foo":"bar"}
+        Haml 5 output: {&quot;foo&quot;:&quot;bar&quot;}
+
+Added
+
+* Add a tracing option. When enabled, Haml will output a data-trace attribute on each tag showing the path
+  to the source Haml file from which it was generated. Thanks [Alex Babkin](https://github.com/ababkin).
+* Add `haml_tag_if` to render a block, conditionally wrapped in another element (Matt Wildig)
+* Support Rails 5.1 Erubi template handler.
+* Support Sprockets 3. Thanks [Sam Davies](https://github.com/samphilipd) and [Jeremy Venezia](https://github.com/jvenezia).
+* General performance and memory usage improvements. (Akira Matsuda)
+* Analyze attribute values by Ripper and render static attributes beforehand. (Takashi Kokubun)
+* Optimize attribute rendering about 3x faster. (Takashi Kokubun)
+* Add temple gem as dependency and create `Haml::TempleEngine` class.
+  Some methods in `Haml::Compiler` are migrated to `Haml::TempleEngine`. (Takashi Kokubun)
+
+Fixed
+
 * Fix for attribute merging. When an attribute method (or literal nested hash)
   was used in an old style attribute hash and there is also a (non-static) new
   style hash there is an error. The fix can result in different behavior in
   some circumstances. See the [commit message](https://github.com/haml/haml/tree/e475b015d3171fb4c4f140db304f7970c787d6e3)
   for detailed info. (Matt Wildig)
 * Make escape_once respect hexadecimal references. (Matt Wildig)
-* General performance and memory usage improvements. (Akira Matsuda)
 * Don't treat the 'data' attribute specially when merging attribute hashes. (Matt Wildig and Norman Clarke)
-* Add a tracing option. When enabled, Haml will output a data-trace attribute on each tag showing the path
-  to the source Haml file from which it was generated. Thanks [Alex Babkin](https://github.com/ababkin).
 * Fix #@foo and #$foo style interpolation that was not working in html_safe mode. (Akira Matsuda)
+* Allow `@` as tag's class name. Thanks [Joe Bartlett](https://github.com/redoPop).
+* Raise `Haml::InvalidAttributeNameError` when attribute name includes invalid characters. (Takashi Kokubun)
+* Don't ignore unexpected exceptions on initializing `ActionView::OutputBuffer`. (Takashi Kokubun)
+
+## 4.0.7
+
+Released on August 10, 2015
+([diff](https://github.com/haml/haml/compare/4.0.6...4.0.7)).
+
+* Significantly improve performance of regexp used to fix whitespace handling in textareas (thanks [Stan Hu](https://github.com/stanhu)).
 
 ## 4.0.6
 

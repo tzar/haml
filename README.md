@@ -42,13 +42,6 @@ To use Haml with Rails, simply add Haml to your Gemfile and run `bundle`.
 gem 'haml'
 ~~~
 
-Haml 4.1 requires an actively maintained version of Rails (version 3.2 or later).
-If you are using Rails 3.0 or 3.1, you should use Haml version 4.0.x:
-
-~~~ruby
-gem 'haml', '~> 4.0.5'
-~~~
-
 If you'd like to replace Rails's Erb-based generators with Haml, add
 [haml-rails](https://github.com/indirect/haml-rails) to your Gemfile as well.
 
@@ -170,17 +163,16 @@ on a specific area:
 ruby -Itest test/helper_test.rb -n test_buffer_access
 ~~~
 
-Haml supports Ruby 1.9.2 and higher, so please make sure your changes run on
-both 1.9 and 2.0.
+Haml currently supports Ruby 2.0.0 and higher, so please make sure your changes run on 2.0+.
 
 ## Team
 
 ### Current Maintainers
 
-* [Norman Clarke](https://github.com/norman)
-* [Matt Wildig](https://github.com/mattwildig)
 * [Akira Matsuda](https://github.com/amatsuda)
+* [Matt Wildig](https://github.com/mattwildig)
 * [Tee Parham](https://github.com/teeparham)
+* [Takashi Kokubun](https://github.com/k0kubun)
 
 ### Alumni
 
@@ -190,6 +182,8 @@ but still consults on language issues.
 
 [Natalie Weizenbaum](http://nex-3.com) was for many years the primary developer
 and architect of the "modern" Ruby implementation of Haml.
+
+[Norman Clarke](http://github.com/norman) was the primary maintainer of Haml from 2012 to 2016.
 
 ## License
 

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 module Haml
   # An exception raised by Haml code.
   class Error < StandardError
@@ -58,4 +59,6 @@ END
   # It's not particularly interesting,
   # except in that it's a subclass of {Haml::Error}.
   class SyntaxError < Error; end
+
+  class InvalidAttributeNameError < SyntaxError; end
 end

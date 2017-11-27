@@ -1021,6 +1021,21 @@ might compile to:
       //]]>
     </script>
 
+#### Gotchas
+
+Haml uses an overly simplistic regular expression to identify string
+interpolation rather than a full-blown Ruby parser. This is fast and works for
+most code but you may have errors with code like the following:
+
+    %span #{'{'}
+
+This code will generate a syntax error, complaining about unbalanced brackets.
+In cases like this, the recommended workaround is output the code as a Ruby
+string to force Haml to parse the code with Ruby.
+
+    %span= "#{'{'}"
+
+
 ### Escaping HTML: `&=` {#escaping_html}
 
 An ampersand followed by one or two equals characters evaluates Ruby code just
@@ -1105,8 +1120,8 @@ is compiled to
       <p>I <strong>really</strong> prefer <em>raspberry</em> jam.</p>
     </div>
 
-Currently, filters ignore the {Haml::Options#escape_html `:escape_html`} option.
-This means that `#{}` interpolation within filters is never HTML-escaped.
+Note that `#{}` interpolation within filters is HTML-escaped if you specify
+{Haml::Options#escape_html `:escape_html`} option.
 
 The functionality of some filters such as Markdown can be provided by many
 different libraries. Usually you don't have to worry about this - you can just
@@ -1129,9 +1144,9 @@ Surrounds the filtered text with CDATA tags.
 
 ### `:coffee` {#coffee-filter}
 
-Compiles the filtered text to Javascript using Coffeescript. You can also
-reference this filter as `:coffeescript`. This filter is implemented using
-Tilt.
+Compiles the filtered text to JavaScript in `<script>` tag using CoffeeScript.
+You can also reference this filter as `:coffeescript`. This filter is
+implemented using Tilt.
 
 ### `:css` {#css-filter}
 
@@ -1159,7 +1174,7 @@ option} to control when CDATA tags are added.
 
 ### `:less` {#less-filter}
 
-Parses the filtered text with [Less](http://lesscss.org/) to produce CSS output.
+Parses the filtered text with [Less](http://lesscss.org/) to produce CSS output in `<style>` tag.
 This filter is implemented using Tilt.
 
 ### `:markdown` {#markdown-filter}
@@ -1202,12 +1217,13 @@ template.
 ### `:sass` {#sass-filter}
 
 Parses the filtered text with [Sass](http://sass-lang.com/) to produce CSS
-output. This filter is implemented using Tilt.
+output in `<style>` tag. This filter is implemented using Tilt.
 
 ### `:scss` {#scss-filter}
 
 Parses the filtered text with Sass like the `:sass` filter, but uses the newer
-SCSS syntax to produce CSS output. This filter is implemented using Tilt.
+SCSS syntax to produce CSS output in `<style>` tag. This filter is implemented
+using Tilt.
 
 ### `:textile` {#textile-filter}
 

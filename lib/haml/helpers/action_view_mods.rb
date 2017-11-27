@@ -1,40 +1,40 @@
-module ActionView
-  class Base
-    def render_with_haml(*args, &block)
-      options = args.first
+# frozen_string_literal: true
+module Haml
+  module Helpers
+    module ActionViewMods
+      def render(*args, &block)
+        options = args.first
 
-      # If render :layout is used with a block, it concats rather than returning
-      # a string so we need it to keep thinking it's Haml until it hits the
-      # sub-render.
-      if is_haml? && !(options.is_a?(Hash) && options[:layout] && block_given?)
-        return non_haml { render_without_haml(*args, &block) }
-      end
-      render_without_haml(*args, &block)
-    end
-    alias_method :render_without_haml, :render
-    alias_method :render, :render_with_haml
-
-    def output_buffer_with_haml
-      return haml_buffer.buffer if is_haml?
-      output_buffer_without_haml
-    end
-    alias_method :output_buffer_without_haml, :output_buffer
-    alias_method :output_buffer, :output_buffer_with_haml
-
-    def set_output_buffer_with_haml(new_buffer)
-      if is_haml?
-        if Haml::Util.rails_xss_safe? && new_buffer.is_a?(ActiveSupport::SafeBuffer)
-          new_buffer = String.new(new_buffer)
+        # If render :layout is used with a block, it concats rather than returning
+        # a string so we need it to keep thinking it's Haml until it hits the
+        # sub-render.
+        if is_haml? && !(options.is_a?(Hash) && options[:layout] && block_given?)
+          return non_haml { super }
         end
-        haml_buffer.buffer = new_buffer
-      else
-        set_output_buffer_without_haml new_buffer
+        super
+      end
+
+      def output_buffer
+        return haml_buffer.buffer if is_haml?
+        super
+      end
+
+      def output_buffer=(new_buffer)
+        if is_haml?
+          if Haml::Util.rails_xss_safe? && new_buffer.is_a?(ActiveSupport::SafeBuffer)
+            new_buffer = String.new(new_buffer)
+          end
+          haml_buffer.buffer = new_buffer
+        else
+          super
+        end
       end
     end
-    alias_method :set_output_buffer_without_haml, :output_buffer=
-    alias_method :output_buffer=, :set_output_buffer_with_haml
+    ActionView::Base.send(:prepend, ActionViewMods)
   end
+end
 
+module ActionView
   module Helpers
     module CaptureHelper
       def capture_with_haml(*args, &block)
@@ -55,14 +55,18 @@ module ActionView
       def content_tag_with_haml(name, *args, &block)
         return content_tag_without_haml(name, *args, &block) unless is_haml?
 
-        preserve = haml_buffer.options[:preserve].include?(name.to_s)
+        preserve = haml_buffer.options.fetch(:preserve, %w[textarea pre code]).include?(name.to_s)
 
         if block_given? && block_is_haml?(block) && preserve
-          return content_tag_without_haml(name, *args) {preserve(&block)}
+          return content_tag_without_haml(name, *args) do
+            haml_buffer.fix_textareas!(Haml::Helpers.preserve(&block)).html_safe
+          end
         end
 
         content = content_tag_without_haml(name, *args, &block)
-        content = Haml::Helpers.preserve(content) if preserve && content
+        if preserve && content
+          content = haml_buffer.fix_textareas!(Haml::Helpers.preserve(content)).html_safe
+        end
         content
       end
 
@@ -82,11 +86,9 @@ module ActionView
       end
     end
 
-    if ActionPack::VERSION::MAJOR == 4
-      module Tags
-        class TextArea
-          include HamlSupport
-        end
+    module Tags
+      class TextArea
+        include HamlSupport
       end
     end
 

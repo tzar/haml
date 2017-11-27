@@ -67,7 +67,7 @@ class FiltersTest < Haml::TestCase
   end
 
   test "should respect escaped newlines and interpolation" do
-    html = "\\n\n"
+    html = "\\n\n\n"
     haml = ":plain\n  \\n\#{""}"
     assert_equal(html, render(haml))
   end
@@ -76,9 +76,9 @@ class FiltersTest < Haml::TestCase
     assert_equal("\n", render(':plain'))
   end
 
-  test "should be compatible with ugly mode" do
+  test ":plain with content" do
     expectation = "foo\n"
-    assert_equal(expectation, render(":plain\n  foo", :ugly => true))
+    assert_equal(expectation, render(":plain\n  foo"))
   end
 
   test "should pass options to Tilt filters that precompile" do
@@ -118,7 +118,7 @@ class FiltersTest < Haml::TestCase
   end
 
   test "interpolated code should be escaped if escape_html is set" do
-    assert_equal "&lt;script&gt;evil&lt;/script&gt;\n",
+    assert_equal "&lt;script&gt;evil&lt;/script&gt;\n\n",
                  render(":plain\n  \#{'<script>evil</script>'}", :escape_html => true)
   end
 
@@ -126,21 +126,16 @@ end
 
 class ErbFilterTest < Haml::TestCase
   test "multiline expressions should work" do
-    html = "foobarbaz\n"
+    html = "foobarbaz\n\n"
     haml = %Q{:erb\n  <%= "foo" +\n      "bar" +\n      "baz" %>}
     assert_equal(html, render(haml))
   end
 
   test "should evaluate in the same context as Haml" do
     haml  = ":erb\n  <%= foo %>"
-    html  = "bar\n"
+    html  = "bar\n\n"
     scope = Object.new.instance_eval {foo = "bar"; nil if foo; binding}
     assert_equal(html, render(haml, :scope => scope))
-  end
-
-  test "should use Rails's XSS safety features" do
-    assert_equal("&lt;img&gt;\n", render(":erb\n  <%= '<img>' %>"))
-    assert_equal("<img>\n", render(":erb\n  <%= '<img>'.html_safe %>"))
   end
 
 end
@@ -262,6 +257,12 @@ class RubyFilterTest < Haml::TestCase
   test "can create local variables" do
     haml = ":ruby\n  a = 7\n=a"
     html = "7\n"
+    assert_equal(html, render(haml))
+  end
+
+  test "can render empty filter" do
+    haml = ":ruby\n%foo"
+    html = "<foo></foo>\n"
     assert_equal(html, render(haml))
   end
 end

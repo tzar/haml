@@ -1,3 +1,6 @@
+# frozen_string_literal: false
+require 'erb'
+
 module Haml
   # This module contains various helpful methods to make it easier to do various tasks.
   # {Haml::Helpers} is automatically included in the context
@@ -203,7 +206,7 @@ MESSAGE
 
         if result.count("\n") > 1
           result.gsub!("\n", "\n  ")
-          result = "\n  #{result.strip!}\n"
+          result = "\n  #{result.strip}\n"
         else
           result.strip!
         end
@@ -384,8 +387,7 @@ MESSAGE
           captured = (value.is_a?(String) ? value : nil)
         end
 
-        return nil if captured.nil?
-        return (haml_buffer.options[:ugly] ? captured : prettify(captured))
+        captured
       end
     ensure
       haml_buffer.capture_position = nil
@@ -412,7 +414,7 @@ MESSAGE
     # @param newline [Boolean] Whether to add a newline after the text
     # @param indent [Boolean] Whether to add indentation to the first line
     def haml_internal_concat(text = "", newline = true, indent = true)
-      if haml_buffer.options[:ugly] || haml_buffer.tabulation == 0
+      if haml_buffer.tabulation == 0
         haml_buffer.buffer << "#{text}#{"\n" if newline}"
       else
         haml_buffer.buffer << %[#{haml_indent if indent}#{text.to_s.gsub("\n", "\n#{haml_indent}")}#{"\n" if newline}]
@@ -496,7 +498,7 @@ MESSAGE
       attrs.keys.each {|key| attrs[key.to_s] = attrs.delete(key)} unless attrs.empty?
       name, attrs = merge_name_and_attributes(name.to_s, attrs)
 
-      attributes = Haml::Compiler.build_attributes(haml_buffer.html?,
+      attributes = Haml::AttributeBuilder.build_attributes(haml_buffer.html?,
         haml_buffer.options[:attr_wrapper],
         haml_buffer.options[:escape_attrs],
         haml_buffer.options[:hyphenate_data_attrs],
@@ -594,9 +596,9 @@ MESSAGE
     end
 
     # Characters that need to be escaped to HTML entities from user input
-    HTML_ESCAPE = { '&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => '&#039;' }
+    HTML_ESCAPE = { '&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => '&#39;' }
 
-    HTML_ESCAPE_REGEX = /[\"><&]/
+    HTML_ESCAPE_REGEX = /['"><&]/
 
     # Returns a copy of `text` with ampersands, angle brackets and quotes
     # escaped into HTML entities.
@@ -608,11 +610,10 @@ MESSAGE
     # @param text [String] The string to sanitize
     # @return [String] The sanitized string
     def html_escape(text)
-      text = text.to_s
-      text.gsub(HTML_ESCAPE_REGEX, HTML_ESCAPE)
+      ERB::Util.html_escape(text)
     end
 
-    HTML_ESCAPE_ONCE_REGEX = /[\"><]|&(?!(?:[a-zA-Z]+|#(?:\d+|[xX][0-9a-fA-F]+));)/
+    HTML_ESCAPE_ONCE_REGEX = /['"><]|&(?!(?:[a-zA-Z]+|#(?:\d+|[xX][0-9a-fA-F]+));)/
 
     # Escapes HTML entities in `text`, but without escaping an ampersand
     # that is already part of an escaped entity.
@@ -651,7 +652,7 @@ MESSAGE
       # skip merging if no ids or classes found in name
       return name, attributes_hash unless name =~ /^(.+?)?([\.#].*)$/
 
-      return $1 || "div", Buffer.merge_attrs(
+      return $1 || "div", AttributeBuilder.merge_attributes!(
         Haml::Parser.parse_class_and_id($2), attributes_hash)
     end
 
@@ -687,22 +688,6 @@ MESSAGE
       #double assignment is to avoid warnings
       _erbout = _erbout = _hamlout.buffer
       proc { |*args| proc.call(*args) }
-    end
-
-    def prettify(text)
-      text = text.split(/^/)
-      text.delete('')
-
-      min_tabs = nil
-      text.each do |line|
-        tabs = line.index(/[^ ]/) || line.length
-        min_tabs ||= tabs
-        min_tabs = min_tabs > tabs ? tabs : min_tabs
-      end
-
-      text.each_with_object('') do |line, str|
-        str << line.slice(min_tabs, line.length)
-      end
     end
   end
 end

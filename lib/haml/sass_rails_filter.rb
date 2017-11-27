@@ -1,11 +1,24 @@
+# frozen_string_literal: true
 module Haml
   module Filters
     # This is an extension of Sass::Rails's SassTemplate class that allows
     # Rails's asset helpers to be used inside Haml Sass filter.
     class SassRailsTemplate < ::Sass::Rails::SassTemplate
-      def render(scope=Object.new, locals={}, &block)
-        scope = ::Rails.application.assets.context_class.new(::Rails.application.assets, "/", "/")
-        super
+      if Gem::Version.new(Sprockets::VERSION) >= Gem::Version.new('3.0.0')
+        def render(scope=Object.new, locals={}, &block)
+          environment = ::Sprockets::Railtie.build_environment(::Rails.application)
+          scope = environment.context_class.new(
+            environment: environment,
+            filename: "/",
+            metadata: {}
+          )
+          super
+        end
+      else
+        def render(scope=Object.new, locals={}, &block)
+          scope = ::Rails.application.assets.context_class.new(::Rails.application.assets, "/", "/")
+          super
+        end
       end
 
       def sass_options(scope)
